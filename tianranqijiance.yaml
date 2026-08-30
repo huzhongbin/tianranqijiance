@@ -5,7 +5,7 @@ esphome:
     board_build.flash_mode: dio   # flash模式dio，适配C3‑SuperMini 4M闪存
 
 esp32:
-  board: esp32-c3-super-mini      # 编译报错就替换为 esp32-c3-devkitm-1
+  board: esp32-c3-devkitm-1      # 编译报错就替换为 esp32-c3-devkitm-1
   framework:
     type: arduino                 # 使用Arduino框架
 
