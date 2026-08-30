@@ -1,0 +1,75 @@
+esphome:
+  name: gas-meter
+  friendly_name: 燃气表
+  platformio_options:
+    board_build.flash_mode: dio   # flash模式dio，适配C3‑SuperMini 4M闪存
+
+esp32:
+  board: esp32-c3-super-mini      # 编译报错就替换为 esp32-c3-devkitm-1
+  framework:
+    type: arduino                 # 使用Arduino框架
+
+wifi:
+  ssid: Mijia                     # WIFI名称
+  password: 09081005              # WIFI密码
+  fast_connect: true              # 跳过wifi扫描，加快启动联网
+  ap:                             # WiFi连不上时自动开启本地热点备份
+    ssid: "Gas‑Monitor‑AP"
+    password: "12345678"
+
+ota:                              # 双OTA升级，参考净水器配置
+  - platform: esphome
+    password: "12345678"
+  - platform: web_server
+
+api:
+  encryption:
+    key: "PUT_YOUR_32BYTE_KEY_HERE"   # 👉替换为你自己生成的32位API密钥
+  reboot_timeout: 0s                   # 和净水器一致：断开HA不自动重启板子
+
+web_server:                       # 内置网页，可浏览器访问看数据、本地上传固件
+  port: 80
+
+logger:
+  level: INFO                     # 日志等级，调试可改为DEBUG
+
+sensor:
+  # 脉冲计数器：燃气表 1脉冲 = 0.01m³
+  - platform: pulse_counter
+    pin:
+      number: GPIO4               # 脉冲信号线接GPIO4
+      mode: INPUT_PULLUP          # 内部上拉，适配干簧管信号
+    name: "燃气总用量"
+    unit_of_measurement: "m³"
+    accuracy_decimals: 2
+    filters:
+      - multiply: 0.01            # 脉冲转立方米：1imp=0.01方
+    total:
+      name: "燃气累计总量"
+      id: gas_total                # 给累计总量增加id，供瞬时流量lambda调用
+      unit_of_measurement: "m³"
+      accuracy_decimals: 2
+
+  # 模板传感器：计算瞬时流量（立方米/分钟），给HA做用火超时告警
+  - platform: template
+    name: "燃气瞬时流量"
+    unit_of_measurement: "m³/min"
+    accuracy_decimals: 3
+    lambda: |-
+      static float last_total = 0;
+      static unsigned long last_time = millis();
+      float now_total = id(gas_total).state;
+      unsigned long now_t = millis();
+      float delta = now_total - last_total;
+      float flow = delta / ((now_t - last_time)/60000.0);
+      last_total = now_total;
+      last_time = now_t;
+      return flow;
+
+text_sensor:
+  - platform: status
+    name: "燃气板状态"             # 设备在线/离线状态
+
+button:
+  - platform: restart
+    name: "燃气板重启"             # HA、网页端都可以远程重启板子
